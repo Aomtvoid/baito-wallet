@@ -84,6 +84,9 @@ export const App: React.FC = () => {
               templates={state.templates}
               settings={state.settings}
               palette={palette}
+              onUpdateSettings={(settings) =>
+                setState((prev) => ({ ...prev, settings }))
+              }
               onAddShift={(shift) =>
                 setState((prev) => ({ ...prev, shifts: [...prev.shifts, shift] }))
               }

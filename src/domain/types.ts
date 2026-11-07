@@ -39,6 +39,7 @@ export interface AppSettings {
   vacation_mode_active: boolean; // false = 28h rolling 7-day target, true = 40h target
   tax_wall_target_yen: 1030000 | 1300000;
   theme?: 'paper' | 'dark';
+  shift_view_mode?: 'stream' | 'grid';
   calendar_show_pay?: boolean;
   calendar_show_rolling_hours?: boolean;
 }

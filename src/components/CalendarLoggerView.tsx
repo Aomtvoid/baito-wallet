@@ -11,6 +11,7 @@ import { buildPaycheckBuckets, resolveShiftPaydayDate } from '../domain/paydayEn
 import { stampShiftFromTemplate } from '../storage/repository';
 import { ThemePalette } from '../theme/colors';
 import { ShiftEditModal } from './ShiftEditModal';
+import { MonthGridSection } from './MonthGridSection';
 
 interface Props {
   shifts: Shift[];
@@ -18,6 +19,7 @@ interface Props {
   templates: ShiftTemplate[];
   settings: AppSettings;
   palette: ThemePalette;
+  onUpdateSettings: (next: AppSettings) => void;
   onAddShift: (shift: Shift) => void;
   onUpdateShift: (shift: Shift) => void;
   onDeleteShift: (shiftId: string) => void;
@@ -62,6 +64,7 @@ export const CalendarLoggerView: React.FC<Props> = ({
   templates,
   settings,
   palette,
+  onUpdateSettings,
   onAddShift,
   onUpdateShift,
   onDeleteShift,
@@ -71,11 +74,12 @@ export const CalendarLoggerView: React.FC<Props> = ({
   const [weekStartMonday, setWeekStartMonday] = useState(() =>
     getMondayOfWeek(todayStr)
   );
-  const [showFullMonthPicker, setShowFullMonthPicker] = useState(false);
   const [modalState, setModalState] = useState<{
     dateStr: string;
     shift?: Shift;
   } | null>(null);
+
+  const viewMode = settings.shift_view_mode ?? 'stream';
 
   const empMap = new Map(employers.map((e) => [e.id, e]));
   const dailyMap = buildDailyNetMinutesMap(shifts);
@@ -264,186 +268,189 @@ export const CalendarLoggerView: React.FC<Props> = ({
                       selectedCompliance.remaining_safe_minutes_on_day / 60
                     ).toFixed(1)}h on this day`}
               </Text>
-              <Pressable
-                onPress={() => setShowFullMonthPicker(!showFullMonthPicker)}
-              >
-                <Text
-                  style={{
-                    fontSize: 10,
-                    fontWeight: '600',
-                    color: palette.textPrimary,
-                    textDecorationLine: 'underline',
-                  }}
-                >
-                  {showFullMonthPicker ? 'Hide Month Jump' : 'Jump Date'}
-                </Text>
-              </Pressable>
+              <View style={{ flexDirection: 'row', gap: 4 }}>
+                {(['stream', 'grid'] as const).map((mode) => {
+                  const active = viewMode === mode;
+                  return (
+                    <Pressable
+                      key={mode}
+                      onPress={() =>
+                        onUpdateSettings({ ...settings, shift_view_mode: mode })
+                      }
+                      style={{
+                        borderWidth: 1,
+                        borderRadius: 2,
+                        paddingHorizontal: 7,
+                        paddingVertical: 2,
+                        backgroundColor: active
+                          ? palette.accentInk
+                          : palette.bgSurface,
+                        borderColor: active
+                          ? palette.accentInk
+                          : palette.borderHairline,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 10,
+                          fontWeight: '600',
+                          color: active
+                            ? palette.accentInkFg
+                            : palette.textSecondary,
+                        }}
+                      >
+                        {mode === 'stream' ? 'Ticket Stream' : 'Month Grid'}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
             </View>
           </View>
         </View>
 
-        {/* 2. HORIZONTAL 7-DAY RIBBON (Replaces the 35-box Calendar Grid) */}
-        <View style={styles.weekRibbonContainer}>
-          <View style={styles.weekNavRow}>
-            <Pressable onPress={() => shiftWeek(-7)} style={styles.weekArrow}>
-              <Text style={{ fontSize: 13, color: palette.textSecondary }}>
-                ← Prev Wk
-              </Text>
-            </Pressable>
+        {viewMode === 'grid' ? (
+          <MonthGridSection
+            shifts={shifts}
+            employers={employers}
+            settings={settings}
+            palette={palette}
+            todayStr={todayStr}
+            selectedDateStr={selectedDateStr}
+            dailyMap={dailyMap}
+            onSelectDate={(dStr) => {
+              setSelectedDateStr(dStr);
+              setWeekStartMonday(getMondayOfWeek(dStr));
+            }}
+            onEditShift={(dStr, sh) => setModalState({ dateStr: dStr, shift: sh })}
+          />
+        ) : (
+          <>
+            {/* 2. HORIZONTAL 7-DAY RIBBON */}
+            <View style={styles.weekRibbonContainer}>
+              <View style={styles.weekNavRow}>
+                <Pressable onPress={() => shiftWeek(-7)} style={styles.weekArrow}>
+                  <Text style={{ fontSize: 13, color: palette.textSecondary }}>
+                    ← Prev Wk
+                  </Text>
+                </Pressable>
 
-            <Pressable onPress={jumpToToday}>
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: '600',
-                  color: palette.textPrimary,
-                }}
-              >
-                {formatReadableDate(weekDates[0])} – {formatReadableDate(weekDates[6])}
-              </Text>
-            </Pressable>
-
-            <Pressable onPress={() => shiftWeek(7)} style={styles.weekArrow}>
-              <Text style={{ fontSize: 13, color: palette.textSecondary }}>
-                Next Wk →
-              </Text>
-            </Pressable>
-          </View>
-
-          <View style={styles.weekStrip}>
-            {weekDates.map((dStr) => {
-              const dayNum = Number(dStr.slice(8, 10));
-              const dow = getDayOfWeek(dStr);
-              const isSelected = dStr === selectedDateStr;
-              const isToday = dStr === todayStr;
-              const dayShifts = shifts.filter((s) => s.start_at.startsWith(dStr));
-              const dayComp = evaluateDayRollingCompliance(
-                dailyMap,
-                dStr,
-                settings.vacation_mode_active
-              );
-              const netHrs = (dailyMap[dStr] ?? 0) / 60;
-
-              return (
-                <Pressable
-                  key={dStr}
-                  onPress={() => setSelectedDateStr(dStr)}
-                  style={[
-                    styles.dayPill,
-                    {
-                      backgroundColor: isSelected
-                        ? palette.accentInk
-                        : dayComp.is_over_limit
-                        ? palette.warnBg
-                        : palette.bgSurface,
-                      borderColor: isSelected
-                        ? palette.accentInk
-                        : isToday
-                        ? palette.textPrimary
-                        : palette.borderHairline,
-                    },
-                  ]}
-                >
+                <Pressable onPress={jumpToToday}>
                   <Text
                     style={{
-                      fontSize: 10,
-                      color: isSelected
-                        ? palette.accentInkFg
-                        : palette.textMuted,
+                      fontSize: 12,
+                      fontWeight: '600',
+                      color: palette.textPrimary,
                     }}
                   >
-                    {SHORT_DAYS[dow]}
+                    {formatReadableDate(weekDates[0])} –{' '}
+                    {formatReadableDate(weekDates[6])}
                   </Text>
-                  <Text
-                    style={{
-                      fontSize: 15,
-                      fontWeight: '700',
-                      marginVertical: 2,
-                      color: isSelected
-                        ? palette.accentInkFg
-                        : palette.textPrimary,
-                    }}
-                  >
-                    {dayNum}
-                  </Text>
+                </Pressable>
 
-                  {/* Tiny job dots or hours */}
-                  <View style={styles.pillDotsRow}>
-                    {dayShifts.length > 0 ? (
-                      dayShifts.slice(0, 3).map((sh) => {
-                        const emp = empMap.get(sh.employer_id);
-                        return (
-                          <View
-                            key={sh.id}
-                            style={[
-                              styles.miniDot,
-                              {
-                                backgroundColor: isSelected
-                                  ? palette.accentInkFg
-                                  : emp?.color ?? '#6E6A63',
-                              },
-                            ]}
-                          />
-                        );
-                      })
-                    ) : (
+                <Pressable onPress={() => shiftWeek(7)} style={styles.weekArrow}>
+                  <Text style={{ fontSize: 13, color: palette.textSecondary }}>
+                    Next Wk →
+                  </Text>
+                </Pressable>
+              </View>
+
+              <View style={styles.weekStrip}>
+                {weekDates.map((dStr) => {
+                  const dayNum = Number(dStr.slice(8, 10));
+                  const dow = getDayOfWeek(dStr);
+                  const isSelected = dStr === selectedDateStr;
+                  const isToday = dStr === todayStr;
+                  const dayShifts = shifts.filter((s) => s.start_at.startsWith(dStr));
+                  const dayComp = evaluateDayRollingCompliance(
+                    dailyMap,
+                    dStr,
+                    settings.vacation_mode_active
+                  );
+                  const netHrs = (dailyMap[dStr] ?? 0) / 60;
+
+                  return (
+                    <Pressable
+                      key={dStr}
+                      onPress={() => setSelectedDateStr(dStr)}
+                      style={[
+                        styles.dayPill,
+                        {
+                          backgroundColor: isSelected
+                            ? palette.accentInk
+                            : dayComp.is_over_limit
+                            ? palette.warnBg
+                            : palette.bgSurface,
+                          borderColor: isSelected
+                            ? palette.accentInk
+                            : isToday
+                            ? palette.textPrimary
+                            : palette.borderHairline,
+                        },
+                      ]}
+                    >
                       <Text
                         style={{
-                          fontSize: 9,
+                          fontSize: 10,
                           color: isSelected
                             ? palette.accentInkFg
                             : palette.textMuted,
-                          opacity: 0.6,
                         }}
                       >
-                        {netHrs > 0 ? `${netHrs.toFixed(0)}h` : '–'}
+                        {SHORT_DAYS[dow]}
                       </Text>
-                    )}
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
+                      <Text
+                        style={{
+                          fontSize: 15,
+                          fontWeight: '700',
+                          marginVertical: 2,
+                          color: isSelected
+                            ? palette.accentInkFg
+                            : palette.textPrimary,
+                        }}
+                      >
+                        {dayNum}
+                      </Text>
 
-        {/* Optional Quick-Jump Date Strip when "Jump Date" is tapped */}
-        {showFullMonthPicker && (
-          <View
-            style={[
-              styles.jumpCard,
-              {
-                backgroundColor: palette.bgSurface,
-                borderColor: palette.borderHairline,
-              },
-            ]}
-          >
-            <View style={styles.weekNavRow}>
-              <Pressable onPress={() => shiftWeek(-28)}>
-                <Text style={{ fontSize: 12, color: palette.textSecondary }}>
-                  « -4 Weeks
-                </Text>
-              </Pressable>
-              <Pressable onPress={jumpToToday}>
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: '600',
-                    color: palette.textPrimary,
-                  }}
-                >
-                  Jump to Today ({todayStr})
-                </Text>
-              </Pressable>
-              <Pressable onPress={() => shiftWeek(28)}>
-                <Text style={{ fontSize: 12, color: palette.textSecondary }}>
-                  +4 Weeks »
-                </Text>
-              </Pressable>
+                      <View style={styles.pillDotsRow}>
+                        {dayShifts.length > 0 ? (
+                          dayShifts.slice(0, 3).map((sh) => {
+                            const emp = empMap.get(sh.employer_id);
+                            return (
+                              <View
+                                key={sh.id}
+                                style={[
+                                  styles.miniDot,
+                                  {
+                                    backgroundColor: isSelected
+                                      ? palette.accentInkFg
+                                      : emp?.color ?? '#6E6A63',
+                                  },
+                                ]}
+                              />
+                            );
+                          })
+                        ) : (
+                          <Text
+                            style={{
+                              fontSize: 9,
+                              color: isSelected
+                                ? palette.accentInkFg
+                                : palette.textMuted,
+                              opacity: 0.6,
+                            }}
+                          >
+                            {netHrs > 0 ? `${netHrs.toFixed(0)}h` : '–'}
+                          </Text>
+                        )}
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
             </View>
-          </View>
-        )}
 
-        {/* 3. VERTICAL SHIFT TICKET TIMELINE (Boarding-Pass Style Cards for the Week) */}
+            {/* 3. VERTICAL SHIFT TICKET TIMELINE */}
         <View style={styles.timelineSection}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: palette.textPrimary }]}>
@@ -722,6 +729,8 @@ export const CalendarLoggerView: React.FC<Props> = ({
             );
           })}
         </View>
+          </>
+        )}
       </ScrollView>
 
       {/* 4. THUMB-ZONE QUICK STAMP DOCK (Pinned above Bottom Tab Bar) */}

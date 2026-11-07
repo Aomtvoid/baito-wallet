@@ -65,6 +65,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   vacation_mode_active: false,
   tax_wall_target_yen: 1030000,
   theme: 'paper',
+  shift_view_mode: 'stream',
   calendar_show_pay: false,
   calendar_show_rolling_hours: false,
 };

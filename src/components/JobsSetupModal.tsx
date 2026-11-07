@@ -111,6 +111,41 @@ export const JobsSetupModal: React.FC<Props> = ({
         </Text>
 
         <View style={styles.prefRow}>
+          <Text style={{ fontSize: 13, color: palette.textSecondary }}>
+            Shift Screen Layout
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            {(['stream', 'grid'] as const).map((mode) => {
+              const active = (settings.shift_view_mode ?? 'stream') === mode;
+              return (
+                <Pressable
+                  key={mode}
+                  onPress={() =>
+                    onUpdateSettings({ ...settings, shift_view_mode: mode })
+                  }
+                  style={[
+                    styles.themeBtn,
+                    {
+                      backgroundColor: active ? palette.accentInk : palette.bgPage,
+                      borderColor: active ? palette.accentInk : palette.borderHairline,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: active ? palette.accentInkFg : palette.textSecondary,
+                    }}
+                  >
+                    {mode === 'stream' ? 'Ticket Stream' : 'Month Grid'}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.prefRow}>
           <Text style={{ fontSize: 13, color: palette.textSecondary }}>Theme</Text>
           <View style={{ flexDirection: 'row', gap: 6 }}>
             {(['paper', 'dark'] as const).map((t) => {
